@@ -1,0 +1,322 @@
+const Viewer3D = {
+  scene: null, camera: null, renderer: null,
+  isInitialized: false, currentModel: null, animFrame: null,
+  particles: [], time: 0, group: null, clock: null,
+  arMode: false, video: null, videoTex: null,
+  _currentContainer: null,
+
+  init(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    if (this._currentContainer === containerId && this.isInitialized) return;
+    if (this.isInitialized) {
+      this._detachRenderer();
+      this._cleanupScene();
+      this.isInitialized = false;
+    }
+    this._currentContainer = containerId;
+    const w = container.clientWidth || window.innerWidth;
+    const h = container.clientHeight || window.innerHeight;
+    this.clock = new THREE.Clock();
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(35, w / h, 0.01, 50);
+    this.camera.position.set(0, 0.25, 3.0);
+    this.camera.lookAt(0, 0, 0);
+
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: true, alpha: true,
+      powerPreference: 'high-performance', stencil: false
+    });
+    this.renderer.setSize(w, h);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.4;
+    this.renderer.outputEncoding = THREE.sRGBEncoding;
+    this.renderer.physicallyCorrectLights = true;
+    container.appendChild(this.renderer.domElement);
+
+    const hemi = new THREE.HemisphereLight(0x4488cc, 0x080820, 0.6);
+    this.scene.add(hemi);
+    const key = new THREE.DirectionalLight(0xffeedd, 2.0);
+    key.position.set(3, 5, 4); this.scene.add(key);
+    const fill = new THREE.DirectionalLight(0x8888ff, 0.6);
+    fill.position.set(-3, 2, -2); this.scene.add(fill);
+    const rim = new THREE.DirectionalLight(0xcc5555, 0.3);
+    rim.position.set(0, -2, -4); this.scene.add(rim);
+
+    this._setDarkBg();
+    this.isInitialized = true;
+    this.animate();
+    window.addEventListener('resize', () => this.resize(container));
+  },
+
+  _detachRenderer() {
+    if (this.renderer && this.renderer.domElement && this.renderer.domElement.parentNode) {
+      this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
+    }
+  },
+
+  _cleanupScene() {
+    this.particles = [];
+    if (this.group) {
+      this.scene?.remove(this.group);
+      this.group.traverse(c => {
+        if (c.geometry) c.geometry.dispose();
+        if (c.material) {
+          if (Array.isArray(c.material)) c.material.forEach(m => m.dispose());
+          else c.material.dispose();
+        }
+      });
+      this.group = null;
+    }
+  },
+
+  _setDarkBg() {
+    const bc = document.createElement('canvas');
+    bc.width = bc.height = 2;
+    const ctx = bc.getContext('2d');
+    const g = ctx.createRadialGradient(1, 1, 0, 1, 1, 1);
+    g.addColorStop(0, '#0d0d20'); g.addColorStop(1, '#050510');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 2, 2);
+    if (this.scene) this.scene.background = new THREE.CanvasTexture(bc);
+  },
+
+  resize(container) {
+    if (!this.renderer || !this.camera) return;
+    const w = container.clientWidth, h = container.clientHeight;
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(w, h);
+  },
+
+  animate() {
+    this.animFrame = requestAnimationFrame(() => this.animate());
+    this.time += 0.016;
+    if (this.videoTex && this.video && this.video.readyState >= 2) this.videoTex.needsUpdate = true;
+    if (this.group) {
+      this.group.rotation.y += 0.006;
+      this.group.position.y = Math.sin(this.time * 0.6) * 0.03;
+      const b = 1 + Math.sin(this.time * 0.4) * 0.005;
+      this.group.scale.set(b, b, b);
+    }
+    this.particles.forEach(p => {
+      p.position.x += p.vx * 0.003;
+      p.position.y += p.vy * 0.003;
+      p.position.z += p.vz * 0.003;
+      const L = 0.9;
+      if (Math.abs(p.position.x) > L) p.vx *= -1;
+      if (Math.abs(p.position.y) > L) p.vy *= -1;
+      if (Math.abs(p.position.z) > L) p.vz *= -1;
+    });
+    if (this.renderer && this.scene && this.camera) {
+      this.renderer.render(this.scene, this.camera);
+    }
+  },
+
+  clear() {
+    this.particles = [];
+    if (this.group) {
+      this.scene?.remove(this.group);
+      this.group.traverse(c => {
+        if (c.geometry) c.geometry.dispose();
+        if (c.material) {
+          if (Array.isArray(c.material)) c.material.forEach(m => m.dispose());
+          else c.material.dispose();
+        }
+      });
+      this.group = null;
+    }
+  },
+
+  destroy() {
+    this.stopAR();
+    this.clear();
+    if (this.animFrame) cancelAnimationFrame(this.animFrame);
+    this._detachRenderer();
+    this.renderer?.dispose();
+    if (this.loader) this.loader = null;
+    this.isInitialized = false;
+    this._currentContainer = null;
+  },
+
+  // ─── AR CAMERA ───
+  async startAR() {
+    if (this.arMode && this.video?.readyState >= 2) return true;
+    try {
+      if (this.video && this.video.srcObject) {
+        this.video.srcObject.getTracks().forEach(t => t.stop());
+      }
+      this.video = document.createElement('video');
+      this.video.setAttribute('playsinline', '');
+      this.video.setAttribute('autoplay', '');
+      this.video.muted = true;
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      this.video.srcObject = stream;
+      await this.video.play();
+      this.videoTex = new THREE.VideoTexture(this.video);
+      this.videoTex.minFilter = THREE.LinearFilter;
+      this.videoTex.magFilter = THREE.LinearFilter;
+      if (this.scene) this.scene.background = this.videoTex;
+      this.arMode = true;
+      if (this.camera) {
+        this.camera.position.set(0, 0.25, 3.0);
+        this.camera.lookAt(0, 0, 0);
+      }
+      return true;
+    } catch (e) {
+      console.warn('AR camera not available:', e.message);
+      return false;
+    }
+  },
+
+  stopAR() {
+    this.arMode = false;
+    if (this.video && this.video.srcObject) {
+      this.video.srcObject.getTracks().forEach(t => t.stop());
+      this.video.srcObject = null;
+    }
+    this.video = null;
+    this.videoTex = null;
+    this._setDarkBg();
+  },
+
+  toggleAR() {
+    return this.arMode ? (this.stopAR(), false) : this.startAR();
+  },
+
+  // ─── AR FLOATING CARD ───
+  async showARCard(containerId, title, text, color) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.style.display = 'block';
+    this.init(containerId);
+    await this.startAR();
+    this.clear();
+    const canvas = document.createElement('canvas');
+    canvas.width = 512; canvas.height = 384;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = color || '#C41E3A';
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(20, 20, 472, 344, 24) : ctx.rect(20, 20, 472, 344);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(20, 20, 472, 344, 24) : ctx.rect(20, 20, 472, 344);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 32px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    const tw = title.split(' ');
+    let tl = '', ty = 70;
+    for (const w of tw) {
+      const t = tl + w + ' ';
+      if (ctx.measureText(t).width > 430) { ctx.fillText(tl, 256, ty); tl = w + ' '; ty += 34; }
+      else { tl = t; }
+    }
+    ctx.fillText(tl, 256, ty);
+    ctx.font = '20px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    const words = text.split(' ');
+    let line = '', y = ty + 40;
+    for (const w of words) {
+      const test = line + w + ' ';
+      if (ctx.measureText(test).width > 430) {
+        ctx.fillText(line, 256, y); line = w + ' '; y += 30;
+      } else { line = test; }
+    }
+    ctx.fillText(line, 256, y);
+    const tex = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, depthTest: false });
+    const geo = new THREE.PlaneGeometry(1.4, 1.05);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(0, 0.1, -0.8);
+    this.group = new THREE.Group();
+    this.group.add(mesh);
+    this.scene.add(this.group);
+  },
+
+  _spawnParticles(count, color, sizeRange) {
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+    const c = new THREE.Color(color);
+    for (let i = 0; i < count; i++) {
+      positions[i*3] = (Math.random() - 0.5) * 2;
+      positions[i*3+1] = (Math.random() - 0.5) * 2;
+      positions[i*3+2] = (Math.random() - 0.5) * 2;
+      colors[i*3] = c.r; colors[i*3+1] = c.g; colors[i*3+2] = c.b;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    const mat = new THREE.PointsMaterial({
+      size: sizeRange[0], vertexColors: true,
+      transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending,
+      depthWrite: false, sizeAttenuation: true
+    });
+    const mesh = new THREE.Points(geo, mat);
+    this.scene.add(mesh);
+    for (let i = 0; i < count; i++) {
+      this.particles.push({
+        position: { x: positions[i*3], y: positions[i*3+1], z: positions[i*3+2] },
+        vx: (Math.random() - 0.5) * 1.2, vy: (Math.random() - 0.5) * 1.2,
+        vz: (Math.random() - 0.5) * 1.2, mesh: mesh
+      });
+    }
+  },
+
+  _fitModel(model, targetSize) {
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    return maxDim > 0 ? (targetSize || 1.5) / maxDim : 1;
+  },
+
+  showComponent(comp) {
+    this.clear();
+    const key = comp.id === 'rbc' ? 'rbc' : comp.id === 'wbc' ? 'wbc' :
+               comp.id === 'platelet' ? 'platelet' : 'plasma';
+    const gltfData = window.MODELS_GLTF?.[key];
+    if (!gltfData) { console.warn('No GLTF data for', key); return; }
+    const loader = new THREE.GLTFLoader();
+    loader.parse(JSON.stringify(gltfData), '', (result) => {
+      const model = result.scene;
+      model.traverse(child => {
+        if (child.isMesh) {
+          child.material.envMapIntensity = 0.8;
+          child.material.needsUpdate = true;
+        }
+      });
+      const s = this._fitModel(model, 1.5);
+      this.group = new THREE.Group();
+      this.group.add(model);
+      this.group.scale.set(s, s, s);
+      this.scene.add(this.group);
+      const pc = comp.id === 'rbc' ? '#CC3333' : comp.id === 'wbc' ? '#E8E0D0' :
+                comp.id === 'platelet' ? '#D4C5A9' : '#F5E6B8';
+      this._spawnParticles(comp.id === 'rbc' ? 40 : 25, pc, [0.006, 0.018]);
+    }, (err) => console.error(key + ' GLTF parse error:', err));
+  },
+
+  showPattern(pattern) {
+    this.clear();
+    const gltfData = window.MODELS_GLTF?.[pattern.id];
+    if (!gltfData) { console.warn('No GLTF data for', pattern.id); return; }
+    const loader = new THREE.GLTFLoader();
+    loader.parse(JSON.stringify(gltfData), '', (result) => {
+      const model = result.scene;
+      model.traverse(child => {
+        if (child.isMesh) {
+          child.material.envMapIntensity = 0.6;
+          child.material.needsUpdate = true;
+        }
+      });
+      const s = this._fitModel(model, 1.5);
+      this.group = new THREE.Group();
+      this.group.add(model);
+      this.group.scale.set(s, s, s);
+      this.scene.add(this.group);
+    }, (err) => console.error(pattern.id + ' GLTF parse error:', err));
+  }
+};
