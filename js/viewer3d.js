@@ -4,6 +4,16 @@ const Viewer3D = {
   particles: [], time: 0, group: null, clock: null,
   arMode: false, video: null, videoTex: null,
   _currentContainer: null,
+  // Interactive controls state
+  autoRotate: true,
+  userRotX: 0, userRotY: 0,
+  targetRotX: 0, targetRotY: 0,
+  zoom: 3.0, targetZoom: 3.0,
+  isDragging: false,
+  _baseScale: 1,
+  _lastPointer: { x: 0, y: 0 },
+  _pinchDist: 0,
+  _pointerHandlers: null,
 
   init(containerId) {
     const container = document.getElementById(containerId);
@@ -46,8 +56,105 @@ const Viewer3D = {
 
     this._setDarkBg();
     this.isInitialized = true;
+    this._attachControls(container);
     this.animate();
     window.addEventListener('resize', () => this.resize(container));
+  },
+
+  _attachControls(container) {
+    // Remove old handlers if any
+    this._detachControls();
+    const el = this.renderer.domElement;
+
+    const onDown = (x, y) => {
+      this.isDragging = true;
+      this.autoRotate = false;
+      this._lastPointer.x = x;
+      this._lastPointer.y = y;
+    };
+    const onMove = (x, y) => {
+      if (!this.isDragging) return;
+      const dx = x - this._lastPointer.x;
+      const dy = y - this._lastPointer.y;
+      this.targetRotY += dx * 0.01;
+      this.targetRotX += dy * 0.01;
+      this.targetRotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.targetRotX));
+      this._lastPointer.x = x;
+      this._lastPointer.y = y;
+    };
+    const onUp = () => { this.isDragging = false; };
+
+    const mouseDown = e => onDown(e.clientX, e.clientY);
+    const mouseMove = e => onMove(e.clientX, e.clientY);
+    const mouseUp = () => onUp();
+    const wheel = e => {
+      e.preventDefault();
+      this.targetZoom = Math.max(1.2, Math.min(6, this.targetZoom + (e.deltaY > 0 ? 0.3 : -0.3)));
+    };
+    const touchStart = e => {
+      if (e.touches.length === 1) {
+        onDown(e.touches[0].clientX, e.touches[0].clientY);
+      } else if (e.touches.length === 2) {
+        this.isDragging = false;
+        this._pinchDist = this._touchDist(e.touches);
+      }
+    };
+    const touchMove = e => {
+      if (e.touches.length === 1) {
+        onMove(e.touches[0].clientX, e.touches[0].clientY);
+      } else if (e.touches.length === 2) {
+        e.preventDefault();
+        const d = this._touchDist(e.touches);
+        if (this._pinchDist > 0) {
+          const delta = (this._pinchDist - d) * 0.01;
+          this.targetZoom = Math.max(1.2, Math.min(6, this.targetZoom + delta));
+        }
+        this._pinchDist = d;
+      }
+    };
+    const touchEnd = () => { onUp(); this._pinchDist = 0; };
+
+    el.addEventListener('mousedown', mouseDown);
+    window.addEventListener('mousemove', mouseMove);
+    window.addEventListener('mouseup', mouseUp);
+    el.addEventListener('wheel', wheel, { passive: false });
+    el.addEventListener('touchstart', touchStart, { passive: true });
+    el.addEventListener('touchmove', touchMove, { passive: false });
+    el.addEventListener('touchend', touchEnd);
+
+    this._pointerHandlers = { el, mouseDown, mouseMove, mouseUp, wheel, touchStart, touchMove, touchEnd };
+  },
+
+  _detachControls() {
+    if (!this._pointerHandlers) return;
+    const h = this._pointerHandlers;
+    h.el.removeEventListener('mousedown', h.mouseDown);
+    window.removeEventListener('mousemove', h.mouseMove);
+    window.removeEventListener('mouseup', h.mouseUp);
+    h.el.removeEventListener('wheel', h.wheel);
+    h.el.removeEventListener('touchstart', h.touchStart);
+    h.el.removeEventListener('touchmove', h.touchMove);
+    h.el.removeEventListener('touchend', h.touchEnd);
+    this._pointerHandlers = null;
+  },
+
+  _touchDist(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  },
+
+  // ─── Public control methods ───
+  zoomIn() { this.targetZoom = Math.max(1.2, this.targetZoom - 0.5); },
+  zoomOut() { this.targetZoom = Math.min(6, this.targetZoom + 0.5); },
+  toggleRotation() { this.autoRotate = !this.autoRotate; return this.autoRotate; },
+  resetView() {
+    this.targetRotX = 0;
+    this.targetRotY = 0;
+    this.userRotX = 0;
+    this.userRotY = 0;
+    this.targetZoom = 3.0;
+    this.autoRotate = true;
   },
 
   _detachRenderer() {
@@ -93,11 +200,27 @@ const Viewer3D = {
     this.animFrame = requestAnimationFrame(() => this.animate());
     this.time += 0.016;
     if (this.videoTex && this.video && this.video.readyState >= 2) this.videoTex.needsUpdate = true;
+
+    // Smooth camera zoom
+    this.zoom += (this.targetZoom - this.zoom) * 0.1;
+    if (this.camera && !this.arMode) {
+      this.camera.position.z = this.zoom;
+      this.camera.lookAt(0, 0, 0);
+    }
+
     if (this.group) {
-      this.group.rotation.y += 0.006;
+      // Smooth user rotation interpolation
+      this.userRotX += (this.targetRotX - this.userRotX) * 0.12;
+      this.userRotY += (this.targetRotY - this.userRotY) * 0.12;
+
+      if (this.autoRotate && !this.isDragging) {
+        this.targetRotY += 0.006;
+      }
+      this.group.rotation.y = this.userRotY;
+      this.group.rotation.x = this.userRotX;
       this.group.position.y = Math.sin(this.time * 0.6) * 0.03;
       const b = 1 + Math.sin(this.time * 0.4) * 0.005;
-      this.group.scale.set(b, b, b);
+      this.group.scale.set(this._baseScale * b, this._baseScale * b, this._baseScale * b);
     }
     this.particles.forEach(p => {
       p.position.x += p.vx * 0.003;
@@ -131,6 +254,7 @@ const Viewer3D = {
   destroy() {
     this.stopAR();
     this.clear();
+    this._detachControls();
     if (this.animFrame) cancelAnimationFrame(this.animFrame);
     this._detachRenderer();
     this.renderer?.dispose();
@@ -289,6 +413,7 @@ const Viewer3D = {
         }
       });
       const s = this._fitModel(model, 1.5);
+      this._baseScale = s;
       this.group = new THREE.Group();
       this.group.add(model);
       this.group.scale.set(s, s, s);
@@ -313,6 +438,7 @@ const Viewer3D = {
         }
       });
       const s = this._fitModel(model, 1.5);
+      this._baseScale = s;
       this.group = new THREE.Group();
       this.group.add(model);
       this.group.scale.set(s, s, s);

@@ -6,10 +6,18 @@ const App = {
   scores: {},
 
   init() {
+    if (window.Progress) Progress.load();
+    this._sessionStart = Date.now();
     this.renderHome();
     this.renderModuleSelection();
     this.renderAbout();
     Nav.go('home');
+    // Track study time on unload
+    window.addEventListener('beforeunload', () => {
+      if (window.Progress && this._sessionStart) {
+        Progress.addStudyTime(Math.round((Date.now() - this._sessionStart) / 1000));
+      }
+    });
   },
 
   onPageChange(page, params) {
@@ -22,6 +30,7 @@ const App = {
       case 'mythfact': this.initMythFact(); break;
       case 'crimescene': this.initCrimeScene(); break;
       case 'quiz': this.initQuiz(params?.module || this.currentModule); break;
+      case 'progress': this.renderProgress(); break;
     }
   },
 
@@ -139,8 +148,8 @@ const App = {
           <button class="btn btn-primary btn-large" onclick="Nav.go('modules')">
             🚀 Start Learning
           </button>
-          <button class="btn btn-secondary btn-large" onclick="Nav.go('about')">
-            📚 Learn More
+          <button class="btn btn-secondary btn-large" onclick="Nav.go('progress')">
+            📊 My Progress
           </button>
         </div>
       </div>
@@ -231,19 +240,33 @@ const App = {
     const page = document.getElementById('page-modules');
     if (!page) return;
     const modules = [
-      { id: 'components', icon: '🩸', name: 'Blood Components', desc: 'Explore RBCs, WBCs, Platelets, and Plasma in interactive 3D', color: '#DC2626' },
-      { id: 'patterns', icon: '🔴', name: 'Pattern Library', desc: 'Study 10 bloodstain patterns with professional AR visualizations', color: '#EF4444' },
-      { id: 'crimescene', icon: '🔍', name: 'Crime Scene Analysis', desc: 'Investigate a realistic assault scenario with guided evidence examination', color: '#F59E0B' },
-      { id: 'mythfact', icon: '⚖️', name: 'Myth vs Fact', desc: 'Master forensic literacy by identifying common misconceptions', color: '#991B1B' }
+      { id: 'components', icon: '🩸', name: 'Blood Components', desc: 'Explore RBCs, WBCs, Platelets, and Plasma in interactive 3D', color: '#DC2626', pkey: 'components' },
+      { id: 'patterns', icon: '🔴', name: 'Pattern Library', desc: 'Study 10 bloodstain patterns with professional AR visualizations', color: '#EF4444', pkey: 'patterns' },
+      { id: 'crimescene', icon: '🔍', name: 'Crime Scene Analysis', desc: 'Investigate a realistic assault scenario with guided evidence examination', color: '#F59E0B', pkey: 'crimescene' },
+      { id: 'mythfact', icon: '⚖️', name: 'Myth vs Fact', desc: 'Master forensic literacy by identifying common misconceptions', color: '#991B1B', pkey: 'mythfact' }
     ];
+    const prog = window.Progress ? Progress.getModuleProgress() : {};
+    const overall = window.Progress ? Progress.getOverallProgress() : 0;
     page.innerHTML = `
       <div class="topbar">
         <button class="back-btn" onclick="Nav.back()">←</button>
         <h1>Learning Modules</h1>
       </div>
       <div class="content">
-        <div class="content-header">
-          <p class="content-subtitle">Choose a module to begin your forensic science training journey</p>
+        <div class="progress-dashboard">
+          <div class="progress-ring-wrap">
+            <svg class="progress-ring" viewBox="0 0 120 120">
+              <circle class="progress-ring-bg" cx="60" cy="60" r="52"/>
+              <circle class="progress-ring-fill" cx="60" cy="60" r="52"
+                style="stroke-dasharray:${2 * Math.PI * 52};stroke-dashoffset:${2 * Math.PI * 52 * (1 - overall / 100)}"/>
+            </svg>
+            <div class="progress-ring-label">${overall}%</div>
+          </div>
+          <div class="progress-dashboard-info">
+            <h3>Your Progress</h3>
+            <p>Overall course completion</p>
+            <button class="btn btn-secondary btn-small mt-sm" onclick="Nav.go('progress')">📊 View Stats</button>
+          </div>
         </div>
         ${modules.map(m => `
           <div class="module-card" onclick="Nav.go('${m.id}')" style="border-left-color:${m.color}">
@@ -253,6 +276,10 @@ const App = {
                 <h3>${m.name}</h3>
                 <p>${m.desc}</p>
               </div>
+            </div>
+            <div class="module-progress">
+              <div class="module-progress-bar"><div class="module-progress-fill" style="width:${prog[m.pkey] || 0}%;background:${m.color}"></div></div>
+              <span class="module-progress-pct">${prog[m.pkey] || 0}%</span>
             </div>
           </div>
         `).join('')}
@@ -267,15 +294,125 @@ const App = {
       </div>`;
   },
 
+  // ========== PROGRESS / STATS ==========
+  renderProgress() {
+    const page = document.getElementById('page-progress');
+    if (!page || !window.Progress) return;
+    const d = Progress.data;
+    const prog = Progress.getModuleProgress();
+    const overall = Progress.getOverallProgress();
+    const achievements = Progress.getAchievements();
+    const unlocked = achievements.filter(a => a.unlocked).length;
+    const quizModules = [
+      { key: 'BloodComponents', name: '🩸 Components' },
+      { key: 'PatternLibrary', name: '🔴 Patterns' },
+      { key: 'CrimeScene', name: '🔍 Crime Scene' },
+      { key: 'MythFact', name: '⚖️ Myth/Fact' }
+    ];
+    const studyMin = Math.round((d.totalStudyTime || 0) / 60);
+    page.innerHTML = `
+      <div class="topbar">
+        <button class="back-btn" onclick="Nav.back()">←</button>
+        <h1>Your Progress</h1>
+      </div>
+      <div class="content">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value">${overall}%</div>
+            <div class="stat-label">Overall</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${unlocked}/${achievements.length}</div>
+            <div class="stat-label">Achievements</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${studyMin}m</div>
+            <div class="stat-label">Study Time</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>📚 Module Completion</h3>
+          ${[
+            { name: 'Blood Components', pct: prog.components, color: '#DC2626' },
+            { name: 'Pattern Library', pct: prog.patterns, color: '#EF4444' },
+            { name: 'Crime Scene', pct: prog.crimescene, color: '#F59E0B' },
+            { name: 'Myth vs Fact', pct: prog.mythfact, color: '#991B1B' }
+          ].map(m => `
+            <div class="stat-row">
+              <span class="stat-row-label">${m.name}</span>
+              <div class="module-progress-bar"><div class="module-progress-fill" style="width:${m.pct}%;background:${m.color}"></div></div>
+              <span class="stat-row-pct">${m.pct}%</span>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="card">
+          <h3>📝 Quiz Best Scores</h3>
+          ${quizModules.map(q => {
+            const score = d.quizScores[q.key];
+            const attempts = d.quizAttempts[q.key] || 0;
+            return `
+            <div class="stat-row">
+              <span class="stat-row-label">${q.name}</span>
+              <div class="module-progress-bar"><div class="module-progress-fill" style="width:${score || 0}%;background:var(--brand-gold)"></div></div>
+              <span class="stat-row-pct">${score != null ? score + '%' : '—'}</span>
+            </div>`;
+          }).join('')}
+        </div>
+
+        <div class="card">
+          <h3>🏆 Achievements <span style="color:var(--text-tertiary);font-size:0.875rem">(${unlocked}/${achievements.length})</span></h3>
+          <div class="achievements-grid">
+            ${achievements.map(a => `
+              <div class="achievement-badge ${a.unlocked ? 'unlocked' : 'locked'}" title="${a.desc}">
+                <div class="achievement-badge-icon">${a.unlocked ? a.icon : '🔒'}</div>
+                <div class="achievement-badge-name">${a.name}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <button class="btn btn-secondary btn-block" onclick="App.confirmResetProgress()">🗑️ Reset Progress</button>
+      </div>`;
+  },
+
+  confirmResetProgress() {
+    if (confirm('Reset all your progress, scores, and achievements? This cannot be undone.')) {
+      Progress.reset();
+      this.renderProgress();
+      this.renderModuleSelection();
+    }
+  },
+
   // ========== BLOOD COMPONENTS ==========
+  _viewerControls() {
+    return `
+      <div class="viewer-controls">
+        <button class="vc-btn" onclick="Viewer3D.zoomIn()" title="Zoom in">🔍+</button>
+        <button class="vc-btn" onclick="Viewer3D.zoomOut()" title="Zoom out">🔍−</button>
+        <button class="vc-btn" id="vc-rotate" onclick="App.toggleViewerRotation()" title="Toggle rotation">⏸️</button>
+        <button class="vc-btn" onclick="Viewer3D.resetView()" title="Reset view">↺</button>
+      </div>`;
+  },
+
+  toggleViewerRotation() {
+    const rotating = Viewer3D.toggleRotation();
+    const btn = document.getElementById('vc-rotate');
+    if (btn) btn.textContent = rotating ? '⏸️' : '▶️';
+  },
+
   initComponents() {
     const page = document.getElementById('page-components');
     if (!page) return;
     page.innerHTML = `
       <div class="topbar"><button class="back-btn" onclick="Nav.back()">←</button><h1>Blood Components</h1><div class="topbar-right"><button class="ar-btn" onclick="App.toggleAR()"><span class="ar-dot"></span> AR</button></div></div>
       <div class="content">
-        <div class="ar-banner"><h3>🔄 3D Interactive Viewer</h3><p>Tap a component below to view its 3D model. Drag to rotate, scroll to zoom.</p></div>
-        <div class="viewer-container" id="component-viewer"></div>
+        <div class="ar-banner"><h3>🔄 3D Interactive Viewer</h3><p>Tap a component below to view its 3D model. Drag to rotate, pinch or scroll to zoom.</p></div>
+        <div class="viewer-container" id="component-viewer">
+          <div class="viewer-hint">✋ Drag to rotate · Pinch to zoom</div>
+        </div>
+        ${this._viewerControls()}
         <div id="component-info" class="card"><p style="color:var(--text-secondary)">Select a component to view details.</p></div>
         <div class="grid-2" id="component-list"></div>
       </div>`;
@@ -295,7 +432,9 @@ const App = {
   showComponentDetail(index) {
     const c = AppData.bloodComponents[index];
     if (!c) return;
+    Viewer3D.resetView();
     Viewer3D.showComponent(c);
+    if (window.Progress) Progress.markViewed('component', c.id);
     const info = document.getElementById('component-info');
     if (info) info.innerHTML = `
       <h3>${c.name} <span style="font-size:14px;color:var(--gold);font-style:italic">${c.scientificName}</span></h3>
@@ -316,7 +455,10 @@ const App = {
         <div class="filter-bar" id="pattern-filters">
           ${categories.map((c, i) => `<button class="filter-btn ${i === 0 ? 'active' : ''}" onclick="App.setPatternFilter(${i})">${c}</button>`).join('')}
         </div>
-        <div class="viewer-container" id="pattern-viewer"></div>
+        <div class="viewer-container" id="pattern-viewer">
+          <div class="viewer-hint">✋ Drag to rotate · Pinch to zoom</div>
+        </div>
+        ${this._viewerControls()}
         <div id="pattern-info" class="card"><p style="color:var(--text-secondary)">Select a pattern to view details.</p></div>
         <div id="pattern-list"></div>
       </div>`;
@@ -354,7 +496,9 @@ const App = {
   showPatternDetail(id) {
     const p = AppData.patterns.find(x => x.id === id);
     if (!p) return;
+    Viewer3D.resetView();
     Viewer3D.showPattern(p);
+    if (window.Progress) Progress.markViewed('pattern', p.id);
     const info = document.getElementById('pattern-info');
     if (info) info.innerHTML = `
       <span class="badge badge-${p.category.toLowerCase().replace(' ', '')}">${p.category}</span>
@@ -433,6 +577,7 @@ const App = {
           <button class="btn btn-primary btn-small" onclick="App.navMF(1)" style="flex:1" ${entries.length <= 1 ? 'disabled' : ''}>Next →</button>
         </div>`;
       this.mfEntries = entries;
+      if (window.Progress && entries[0]) Progress.markViewed('mythfact', entries[0].id);
     } else {
       this.mfQuizIndex = 0;
       this.mfScore = 0;
@@ -450,6 +595,7 @@ const App = {
   navMF(dir) {
     this.mfIndex = (this.mfIndex + dir + this.mfEntries.length) % this.mfEntries.length;
     const e = this.mfEntries[this.mfIndex];
+    if (window.Progress && e) Progress.markViewed('mythfact', e.id);
     const inner = document.getElementById('mf-inner');
     if (inner) inner.style.transform = 'rotateY(0deg)';
     document.getElementById('mf-card')?.classList.remove('flipped');
@@ -568,6 +714,7 @@ const App = {
     const e = AppData.crimeScene.evidence.find(x => x.id === id);
     if (!e) return;
     this.examinedEvidence.add(id);
+    if (window.Progress) Progress.markEvidence(id);
     this.renderCSEvidence();
     if (this.csMode === 'guided') this.csStep++;
     const panel = document.createElement('div');
@@ -614,6 +761,7 @@ const App = {
   showCSReport() {
     const report = document.getElementById('cs-report');
     if (!report) return;
+    if (window.Progress) Progress.setCrimeSceneComplete();
     report.style.display = 'block';
     const total = AppData.crimeScene.evidence.length;
     const found = this.examinedEvidence.size;
@@ -708,14 +856,23 @@ const App = {
     const pct = qs.questions.length > 0 ? Math.round((qs.score / qs.questions.length) * 100) : 0;
     const grade = pct >= 85 ? 'Excellent' : pct >= 70 ? 'Good' : pct >= 50 ? 'Fair' : 'Poor';
     const gradeClass = pct >= 85 ? 'grade-excellent' : pct >= 70 ? 'grade-good' : pct >= 50 ? 'grade-fair' : 'grade-poor';
+    let bestScore = pct;
+    let isNewBest = false;
+    if (window.Progress) {
+      const prevBest = Progress.getBestScore(qs.module) || 0;
+      isNewBest = pct > prevBest;
+      bestScore = Progress.recordQuizScore(qs.module, pct);
+    }
     const container = document.getElementById('quiz-content');
     if (!container) return;
     container.innerHTML = `
       <div class="card" style="text-align:center;padding:24px">
         <h2>Quiz Complete!</h2>
+        ${isNewBest ? '<div style="color:var(--brand-gold);font-weight:600;margin-bottom:8px">🎉 New Best Score!</div>' : ''}
         <div class="result-circle ${gradeClass}">${pct}%</div>
         <div style="font-size:20px;font-weight:600;margin-bottom:4px">${qs.score}/${qs.questions.length}</div>
-        <div style="font-size:16px;color:var(--gold);margin-bottom:16px">Grade: ${grade}</div>
+        <div style="font-size:16px;color:var(--gold);margin-bottom:4px">Grade: ${grade}</div>
+        <div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">Best: ${bestScore}%</div>
         <div style="margin-bottom:16px">
           ${Array(5).fill(0).map((_, i) => `<span style="font-size:24px">${i < Math.round(pct / 20) ? '★' : '☆'}</span>`).join('')}
         </div>

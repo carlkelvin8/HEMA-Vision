@@ -14,7 +14,8 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
         pass
 
 print(f"\n  🩸 HEMA-Vision — Bloodstain Analysis AR")
-print(f"  ───────────────────────────────────────")print(f"  Server: http://localhost:{PORT}")
+print(f"  ───────────────────────────────────────")
+print(f"  Server: http://localhost:{PORT}")
 print(f"  Open on mobile: http://YOUR_IP:{PORT}")
 print(f"  Press Ctrl+C to stop\n")
 
