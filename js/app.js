@@ -131,25 +131,49 @@ const App = {
     const page = document.getElementById('page-home');
     if (!page) return;
     page.innerHTML = `
-      <div class="home-page" style="display:flex;flex-direction:column;height:100%">
-        <div class="home-hero">
-          <div class="app-icon">🔬</div>
-          <h1>HEMA-Vision</h1>
-          <p>Combating Forensic Misinformation Through Augmented Reality Learning</p>
+      <div class="landing-hero">
+        <div class="landing-logo">🔬</div>
+        <h1 class="landing-title">HEMA-Vision</h1>
+        <p class="landing-subtitle">Master forensic bloodstain pattern analysis through cutting-edge augmented reality technology</p>
+        <div class="landing-cta">
+          <button class="btn btn-primary btn-large" onclick="Nav.go('modules')">
+            🚀 Start Learning
+          </button>
+          <button class="btn btn-secondary btn-large" onclick="Nav.go('about')">
+            📚 Learn More
+          </button>
         </div>
-        <div class="home-menu">
-          <button class="btn btn-primary" onclick="Nav.go('modules')">
-            <span class="icon">📚</span> Start Learning
-          </button>
-          <button class="btn btn-secondary" onclick="Nav.go('modules')">
-            <span class="icon">📖</span> Learning Modules
-          </button>
-          <button class="btn btn-secondary" onclick="Nav.go('about')" style="background:transparent;border:none;color:var(--text-secondary)">
-            <span class="icon">ℹ️</span> About This Study
-          </button>
-          <div style="text-align:center;margin-top:20px;font-size:12px;color:var(--gray)">
-            v1.0.0 | Forensic Science Educational Tool
-          </div>
+      </div>
+      <div class="landing-features">
+        <div class="feature-card">
+          <div class="feature-icon">🩸</div>
+          <h3 class="feature-title">Interactive 3D Models</h3>
+          <p class="feature-desc">Explore blood components and patterns in stunning 3D with full AR support</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔍</div>
+          <h3 class="feature-title">Crime Scene Investigation</h3>
+          <p class="feature-desc">Analyze realistic evidence and develop professional forensic skills</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">⚖️</div>
+          <h3 class="feature-title">Combat Misinformation</h3>
+          <p class="feature-desc">Learn to identify and correct common forensic misconceptions</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📱</div>
+          <h3 class="feature-title">AR Learning</h3>
+          <p class="feature-desc">Use your device camera to overlay forensic models in real space</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3 class="feature-title">Knowledge Assessment</h3>
+          <p class="feature-desc">Test your understanding with comprehensive quizzes and scenarios</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🎓</div>
+          <h3 class="feature-title">Evidence-Based</h3>
+          <p class="feature-desc">Content based on SWGSTAIN standards and peer-reviewed research</p>
         </div>
       </div>`;
   },
@@ -159,13 +183,46 @@ const App = {
     const page = document.getElementById('page-about');
     if (!page) return;
     page.innerHTML = `
-      <div class="topbar"><button class="back-btn" onclick="Nav.back()">←</button><h1>About This Study</h1></div>
+      <div class="topbar">
+        <button class="back-btn" onclick="Nav.back()">←</button>
+        <h1>About HEMA-Vision</h1>
+      </div>
       <div class="content">
-        <div class="card"><h3>Purpose</h3><p>This AR educational application is designed for criminology and forensic science students to combat forensic misinformation by providing scientifically accurate and interactive learning experiences about bloodstain analysis.</p></div>
-        <div class="card"><h3>Scientific Foundation</h3><p>All content is based on accepted Bloodstain Pattern Analysis (BPA) principles as established by SWGSTAIN (Scientific Working Group on Bloodstain Pattern Analysis) and leading forensic science literature.</p></div>
-        <div class="card"><h3>Learning Objectives</h3><p>• Understand blood composition and bloodstain patterns<br>• Analyze bloodstain evidence correctly<br>• Identify misconceptions about forensic science<br>• Interpret crime scene evidence scientifically<br>• Improve forensic literacy through AR experiences</p></div>
-        <div class="card"><h3>Target Users</h3><p>Criminology students, forensic science students, law enforcement trainees, and anyone interested in understanding the scientific basis of bloodstain pattern analysis.</p></div>
-        <div class="card"><h3>Technology</h3><p>Built with Three.js for 3D visualization and WebXR/AR.js for Augmented Reality capabilities. Accessible via any modern mobile web browser.</p></div>
+        <div class="card">
+          <h3>🎯 Mission Statement</h3>
+          <p>HEMA-Vision is an innovative AR-powered educational platform designed to combat forensic science misinformation by providing criminology and forensic science students with scientifically accurate, interactive learning experiences in bloodstain pattern analysis.</p>
+        </div>
+        <div class="card">
+          <h3>🔬 Scientific Foundation</h3>
+          <p>All educational content is rigorously based on guidelines established by SWGSTAIN (Scientific Working Group on Bloodstain Pattern Analysis) and peer-reviewed forensic science literature. Our models and scenarios reflect real-world applications while maintaining pedagogical clarity.</p>
+        </div>
+        <div class="card">
+          <h3>📚 Learning Objectives</h3>
+          <p>• Master blood composition and cellular components<br>
+          • Understand bloodstain pattern formation mechanisms<br>
+          • Analyze crime scene evidence systematically<br>
+          • Identify and correct forensic misconceptions<br>
+          • Develop critical thinking in forensic interpretation<br>
+          • Experience AR-enhanced spatial learning</p>
+        </div>
+        <div class="card">
+          <h3>👥 Target Audience</h3>
+          <p>This platform serves criminology students, forensic science students, law enforcement trainees, legal professionals, and anyone seeking evidence-based education in bloodstain pattern analysis.</p>
+        </div>
+        <div class="card">
+          <h3>💻 Technology Stack</h3>
+          <p>Built with cutting-edge web technologies including Three.js for 3D rendering, WebXR for augmented reality, and modern web standards ensuring cross-platform compatibility. Accessible on any device with a modern browser and camera.</p>
+        </div>
+        <div class="card">
+          <h3>🤝 Academic Integrity</h3>
+          <p>HEMA-Vision was developed as a research project to address the "CSI Effect" and combat media-driven forensic misconceptions. All scenarios are simulated training exercises designed for educational purposes only.</p>
+        </div>
+        <div class="card" style="text-align:center;border:2px solid var(--brand-gold)">
+          <h4 style="color:var(--brand-gold);margin-bottom:var(--space-md)">📜 Version Information</h4>
+          <p style="font-size:0.875rem;margin-bottom:var(--space-sm)"><strong>Version:</strong> 1.0.0</p>
+          <p style="font-size:0.875rem;margin-bottom:var(--space-sm)"><strong>Last Updated:</strong> 2024</p>
+          <p style="font-size:0.875rem"><strong>Platform:</strong> Web-based AR Learning System</p>
+        </div>
       </div>`;
   },
 
@@ -174,26 +231,39 @@ const App = {
     const page = document.getElementById('page-modules');
     if (!page) return;
     const modules = [
-      { id: 'components', icon: '🩸', name: 'Blood Components', desc: 'Explore RBCs, WBCs, Platelets, and Plasma in 3D', color: '#CC3333' },
-      { id: 'patterns', icon: '🔴', name: 'Pattern Library', desc: 'Study 10 bloodstain patterns with AR visualizations', color: '#C41E3A' },
-      { id: 'crimescene', icon: '🔍', name: 'Crime Scene Investigation', desc: 'Examine evidence in an immersive crime scene', color: '#D4A843' },
-      { id: 'mythfact', icon: '⚖️', name: 'Myth vs Fact', desc: 'Identify and correct forensic misconceptions', color: '#8B0000' }
+      { id: 'components', icon: '🩸', name: 'Blood Components', desc: 'Explore RBCs, WBCs, Platelets, and Plasma in interactive 3D', color: '#DC2626' },
+      { id: 'patterns', icon: '🔴', name: 'Pattern Library', desc: 'Study 10 bloodstain patterns with professional AR visualizations', color: '#EF4444' },
+      { id: 'crimescene', icon: '🔍', name: 'Crime Scene Analysis', desc: 'Investigate a realistic assault scenario with guided evidence examination', color: '#F59E0B' },
+      { id: 'mythfact', icon: '⚖️', name: 'Myth vs Fact', desc: 'Master forensic literacy by identifying common misconceptions', color: '#991B1B' }
     ];
     page.innerHTML = `
-      <div class="topbar"><h1>Learning Modules</h1></div>
+      <div class="topbar">
+        <button class="back-btn" onclick="Nav.back()">←</button>
+        <h1>Learning Modules</h1>
+      </div>
       <div class="content">
-        <p style="color:var(--text-secondary);margin-bottom:16px;font-size:14px">Select a module to begin your forensic science training.</p>
+        <div class="content-header">
+          <p class="content-subtitle">Choose a module to begin your forensic science training journey</p>
+        </div>
         ${modules.map(m => `
-          <div class="card" onclick="Nav.go('${m.id}')" style="cursor:pointer;border-left:4px solid ${m.color}">
-            <div style="display:flex;align-items:center;gap:12px">
-              <span style="font-size:32px">${m.icon}</span>
-              <div><h3>${m.name}</h3><p>${m.desc}</p></div>
+          <div class="module-card" onclick="Nav.go('${m.id}')" style="border-left-color:${m.color}">
+            <div class="module-header">
+              <div class="module-icon">${m.icon}</div>
+              <div class="module-content">
+                <h3>${m.name}</h3>
+                <p>${m.desc}</p>
+              </div>
             </div>
           </div>
         `).join('')}
-        <button class="btn btn-primary btn-block" onclick="Nav.go('quiz')" style="margin-top:8px">
-          📝 Take Comprehensive Quiz
+        <button class="btn btn-gold btn-block mt-lg" onclick="Nav.go('quiz')">
+          📝 Comprehensive Assessment Quiz
         </button>
+        <div class="divider"></div>
+        <div class="card" style="text-align:center">
+          <h4 style="color:var(--brand-gold);margin-bottom:var(--space-md)">🎓 Learning Path</h4>
+          <p style="font-size:0.875rem;color:var(--text-tertiary)">We recommend completing modules in order: Blood Components → Pattern Library → Crime Scene → Myth vs Fact → Quiz</p>
+        </div>
       </div>`;
   },
 
