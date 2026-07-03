@@ -1,11 +1,16 @@
 const App = {
   currentModule: '',
+  _inited: false,
+  _currentComponentId: null,
+  _currentPatternId: null,
   quizState: null,
   mythFactIndex: 0,
   examinedEvidence: new Set(),
   scores: {},
 
   init() {
+    if (this._inited) return;
+    this._inited = true;
     if (window.Progress) Progress.load();
     this._sessionStart = Date.now();
     this.renderHome();
@@ -32,6 +37,15 @@ const App = {
       case 'quiz': this.initQuiz(params?.module || this.currentModule); break;
       case 'progress': this.renderProgress(); break;
     }
+  },
+
+  // ─── MARKER-BASED AR (AR.js) ───
+  // Opens a dedicated camera AR view where the selected model is
+  // anchored onto a real-world marker.
+  openMarkerAR(kind) {
+    const id = kind === 'pattern' ? this._currentPatternId : this._currentComponentId;
+    if (!id) { alert('Select a model first.'); return; }
+    window.location.href = '/ar.html?model=' + encodeURIComponent(id);
   },
 
   // ─── AR TOGGLE ───
@@ -79,9 +93,9 @@ const App = {
       btn && (btn.innerHTML = '<span class="ar-dot"></span> AR ON');
       const hint = document.createElement('div');
       hint.className = 'ar-hint';
-      hint.textContent = '📱 Move device to see 3D model on real background';
+      hint.textContent = '📱 Point at a flat surface · Tap to place · Drag to rotate';
       document.querySelector('.page.active')?.appendChild(hint);
-      setTimeout(() => hint.remove(), 4000);
+      setTimeout(() => hint.remove(), 5000);
     }
   },
 
@@ -406,9 +420,9 @@ const App = {
     const page = document.getElementById('page-components');
     if (!page) return;
     page.innerHTML = `
-      <div class="topbar"><button class="back-btn" onclick="Nav.back()">←</button><h1>Blood Components</h1><div class="topbar-right"><button class="ar-btn" onclick="App.toggleAR()"><span class="ar-dot"></span> AR</button></div></div>
+      <div class="topbar"><button class="back-btn" onclick="Nav.back()">←</button><h1>Blood Components</h1><div class="topbar-right"><button class="ar-btn" onclick="App.openMarkerAR('component')"><span class="ar-dot"></span> AR</button></div></div>
       <div class="content">
-        <div class="ar-banner"><h3>🔄 3D Interactive Viewer</h3><p>Tap a component below to view its 3D model. Drag to rotate, pinch or scroll to zoom.</p></div>
+        <div class="ar-banner"><h3>🔄 3D Interactive Viewer</h3><p>Tap a component to view it in 3D. Drag to rotate, pinch to zoom. Tap <strong>AR</strong> to see it live over your camera.</p></div>
         <div class="viewer-container" id="component-viewer">
           <div class="viewer-hint">✋ Drag to rotate · Pinch to zoom</div>
         </div>
@@ -432,6 +446,7 @@ const App = {
   showComponentDetail(index) {
     const c = AppData.bloodComponents[index];
     if (!c) return;
+    this._currentComponentId = c.id;
     Viewer3D.resetView();
     Viewer3D.showComponent(c);
     if (window.Progress) Progress.markViewed('component', c.id);
@@ -449,7 +464,7 @@ const App = {
     if (!page) return;
     const categories = ['All', 'Passive', 'Impact Spatter', 'Cast-Off', 'Arterial', 'Transfer', 'Altered'];
     page.innerHTML = `
-      <div class="topbar"><button class="back-btn" onclick="Nav.back()">←</button><h1>Pattern Library</h1><div class="topbar-right"><button class="ar-btn" onclick="App.toggleAR()"><span class="ar-dot"></span> AR</button></div></div>
+      <div class="topbar"><button class="back-btn" onclick="Nav.back()">←</button><h1>Pattern Library</h1><div class="topbar-right"><button class="ar-btn" onclick="App.openMarkerAR('pattern')"><span class="ar-dot"></span> AR</button></div></div>
       <div class="content">
         <input class="search-input" id="pattern-search" placeholder="🔍 Search patterns..." oninput="App.filterPatterns()">
         <div class="filter-bar" id="pattern-filters">
@@ -496,6 +511,7 @@ const App = {
   showPatternDetail(id) {
     const p = AppData.patterns.find(x => x.id === id);
     if (!p) return;
+    this._currentPatternId = p.id;
     Viewer3D.resetView();
     Viewer3D.showPattern(p);
     if (window.Progress) Progress.markViewed('pattern', p.id);
@@ -682,7 +698,7 @@ const App = {
     this.csMode = 'guided';
     this.csStep = 0;
     this.renderCSEvidence();
-    this.updateCSStep();
+    this.updateCSTStep();
   },
 
   setCSMode(mode) {
@@ -895,3 +911,5 @@ const App = {
 };
 
 document.addEventListener('DOMContentLoaded', () => App.init());
+// When loaded dynamically (e.g. via Next.js) the DOM may already be ready.
+if (document.readyState !== 'loading') App.init();

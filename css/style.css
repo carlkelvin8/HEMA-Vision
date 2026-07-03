@@ -2,6 +2,7 @@
    HEMA-Vision — Modern Forensic AR Platform
    Design System: Dark Mode / Glassmorphism / Micro-interactions
 ================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
 :root {
   /* Core Colors */
@@ -2258,5 +2259,84 @@ body::before {
   .stat-row-label {
     min-width: 90px;
     font-size: 0.8125rem;
+  }
+}
+
+/* ================================================
+   AR / 3D ANNOTATION LABELS
+================================================ */
+.ar-label-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 5;
+}
+
+.ar-label-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.ar-label-line {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 1.5;
+  transition: opacity 0.2s ease;
+}
+
+.ar-label-dot {
+  fill: var(--brand-gold);
+  stroke: rgba(255, 255, 255, 0.9);
+  stroke-width: 1;
+  transition: opacity 0.2s ease;
+}
+
+.ar-label-box {
+  position: absolute;
+  padding: 5px 11px;
+  background: rgba(10, 14, 26, 0.82);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  transition: opacity 0.2s ease;
+  will-change: left, top, transform;
+}
+
+/* AR control bar (place / rotate hints while in camera mode) */
+.ar-place-hint {
+  position: fixed;
+  bottom: calc(var(--space-2xl) + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 10px 20px;
+  background: rgba(10, 14, 26, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  z-index: 150;
+  pointer-events: none;
+  animation: fadeInUp 0.4s ease;
+}
+
+@media (max-width: 374px) {
+  .ar-label-box {
+    font-size: 0.6875rem;
+    padding: 4px 9px;
   }
 }

@@ -292,3 +292,79 @@ const AppData = {
 };
 
 window.AppData = AppData;
+
+// ================================================
+// AR / 3D Annotation Labels
+// Each label: { text, dir:[x,y,z] } — dir points from
+// model center toward the surface; the leader line and
+// floating label are placed along that direction.
+// ================================================
+const AR_LABELS = {
+  // Blood components
+  rbc: [
+    { text: 'Biconcave Disc', dir: [0, 1, 0.25] },
+    { text: 'No Nucleus', dir: [-1, 0.15, 0.35] },
+    { text: 'Hemoglobin', dir: [1, 0.1, 0.4] },
+    { text: 'Flexible Membrane', dir: [0, -0.9, 0.5] }
+  ],
+  wbc: [
+    { text: 'Lobed Nucleus', dir: [0.2, 1, 0.3] },
+    { text: 'Cytoplasm', dir: [-1, 0.2, 0.4] },
+    { text: 'Cell Membrane', dir: [1, 0.05, 0.35] }
+  ],
+  platelet: [
+    { text: 'Cell Fragment', dir: [0, 1, 0.3] },
+    { text: 'Granules', dir: [1, 0.1, 0.4] },
+    { text: 'Irregular Shape', dir: [-1, 0.2, 0.35] }
+  ],
+  plasma: [
+    { text: '92% Water', dir: [0, 1, 0.3] },
+    { text: 'Proteins', dir: [-1, 0.15, 0.4] },
+    { text: 'Nutrients & Hormones', dir: [1, 0.1, 0.35] }
+  ],
+  // Bloodstain patterns
+  drip: [
+    { text: 'Circular Shape', dir: [0, 1, 0.3] },
+    { text: 'Smooth Edges', dir: [1, 0.1, 0.4] },
+    { text: 'Satellite Spatter', dir: [-1, 0.2, 0.35] }
+  ],
+  flow: [
+    { text: 'Follows Gravity', dir: [0, 1, 0.3] },
+    { text: 'Tapered Trail', dir: [1, 0, 0.4] }
+  ],
+  pool: [
+    { text: 'Accumulation', dir: [0, 1, 0.3] },
+    { text: 'Drying Periphery', dir: [1, 0.1, 0.4] }
+  ],
+  spatter: [
+    { text: 'Radiating Droplets', dir: [0, 1, 0.3] },
+    { text: 'Area of Convergence', dir: [-1, 0.1, 0.4] },
+    { text: 'Directionality', dir: [1, 0.15, 0.35] }
+  ],
+  castoff: [
+    { text: 'Linear Arc', dir: [0, 1, 0.3] },
+    { text: 'Elliptical Stains', dir: [1, 0.1, 0.4] }
+  ],
+  spurt: [
+    { text: 'Arterial Pressure', dir: [0, 1, 0.3] },
+    { text: 'Rhythmic Pattern', dir: [1, 0.1, 0.4] }
+  ],
+  swipe: [
+    { text: 'Leading Edge', dir: [0, 1, 0.3] },
+    { text: 'Feathered Trail', dir: [-1, 0.15, 0.4] }
+  ],
+  wipe: [
+    { text: 'Disrupted Stain', dir: [0, 1, 0.3] },
+    { text: 'Smearing', dir: [1, 0.1, 0.4] }
+  ],
+  contact: [
+    { text: 'Object Replica', dir: [0, 1, 0.3] },
+    { text: 'Preserved Detail', dir: [1, 0.1, 0.4] }
+  ],
+  altered: [
+    { text: 'Diluted Color', dir: [0, 1, 0.3] },
+    { text: 'Diffused Edges', dir: [-1, 0.15, 0.4] }
+  ]
+};
+
+window.AR_LABELS = AR_LABELS;

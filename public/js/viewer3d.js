@@ -11,6 +11,14 @@ const Viewer3D = {
   zoom: 3.0, targetZoom: 3.0,
   isDragging: false,
   _baseScale: 1,
+  // Annotation labels
+  labels: [],
+  _labelLayer: null,
+  _gyroEnabled: false,
+  _gyroQuat: null,
+  _placed: false,
+  _modelPos: null,
+  _deviceOrient: null,
   _lastPointer: { x: 0, y: 0 },
   _pinchDist: 0,
   _pointerHandlers: null,
@@ -71,18 +79,28 @@ const Viewer3D = {
       this.autoRotate = false;
       this._lastPointer.x = x;
       this._lastPointer.y = y;
+      this._downX = x; this._downY = y;
+      this._downTime = Date.now();
+      this._moved = 0;
     };
     const onMove = (x, y) => {
       if (!this.isDragging) return;
       const dx = x - this._lastPointer.x;
       const dy = y - this._lastPointer.y;
+      this._moved += Math.abs(dx) + Math.abs(dy);
       this.targetRotY += dx * 0.01;
       this.targetRotX += dy * 0.01;
       this.targetRotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.targetRotX));
       this._lastPointer.x = x;
       this._lastPointer.y = y;
     };
-    const onUp = () => { this.isDragging = false; };
+    const onUp = () => {
+      // Tap (minimal movement) while in AR re-places the model in front
+      if (this.arMode && this._moved < 10 && (Date.now() - this._downTime) < 350) {
+        this.placeInFront();
+      }
+      this.isDragging = false;
+    };
 
     const mouseDown = e => onDown(e.clientX, e.clientY);
     const mouseMove = e => onMove(e.clientX, e.clientY);
@@ -206,6 +224,9 @@ const Viewer3D = {
     if (this.camera && !this.arMode) {
       this.camera.position.z = this.zoom;
       this.camera.lookAt(0, 0, 0);
+    } else if (this.camera && this.arMode && this._gyroEnabled && this._deviceOrient) {
+      // Anchor model in the world: rotate the camera with the device
+      this._applyGyroToCamera();
     }
 
     if (this.group) {
@@ -218,7 +239,8 @@ const Viewer3D = {
       }
       this.group.rotation.y = this.userRotY;
       this.group.rotation.x = this.userRotX;
-      this.group.position.y = Math.sin(this.time * 0.6) * 0.03;
+      const mp = this._modelPos || { x: 0, y: 0, z: 0 };
+      this.group.position.set(mp.x, mp.y + Math.sin(this.time * 0.6) * 0.03, mp.z);
       const b = 1 + Math.sin(this.time * 0.4) * 0.005;
       this.group.scale.set(this._baseScale * b, this._baseScale * b, this._baseScale * b);
     }
@@ -234,10 +256,12 @@ const Viewer3D = {
     if (this.renderer && this.scene && this.camera) {
       this.renderer.render(this.scene, this.camera);
     }
+    this._updateLabels();
   },
 
   clear() {
     this.particles = [];
+    this.clearLabels();
     if (this.group) {
       this.scene?.remove(this.group);
       this.group.traverse(c => {
@@ -284,10 +308,16 @@ const Viewer3D = {
       this.videoTex.magFilter = THREE.LinearFilter;
       if (this.scene) this.scene.background = this.videoTex;
       this.arMode = true;
+      // Anchor the model as if it's resting on a surface in front of the viewer
+      this._modelPos = new THREE.Vector3(0, -0.35, -2.2);
+      this.autoRotate = false;
+      this.targetRotX = 0.15;
       if (this.camera) {
-        this.camera.position.set(0, 0.25, 3.0);
-        this.camera.lookAt(0, 0, 0);
+        this.camera.position.set(0, 0, 0);
+        this.camera.rotation.set(0, 0, 0);
+        this.camera.lookAt(0, -0.35, -2.2);
       }
+      await this.enableGyro();
       return true;
     } catch (e) {
       console.warn('AR camera not available:', e.message);
@@ -295,8 +325,86 @@ const Viewer3D = {
     }
   },
 
+  // ─── DEVICE ORIENTATION (world anchoring) ───
+  async enableGyro() {
+    try {
+      // iOS 13+ requires explicit permission
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const res = await DeviceOrientationEvent.requestPermission();
+        if (res !== 'granted') { this._gyroEnabled = false; return false; }
+      }
+      this._orientHandler = (e) => {
+        if (e.alpha == null) return;
+        this._deviceOrient = { alpha: e.alpha, beta: e.beta, gamma: e.gamma };
+      };
+      window.addEventListener('deviceorientation', this._orientHandler, true);
+      this._gyroEnabled = true;
+      return true;
+    } catch (e) {
+      console.warn('Gyro not available:', e.message);
+      this._gyroEnabled = false;
+      return false;
+    }
+  },
+
+  disableGyro() {
+    if (this._orientHandler) {
+      window.removeEventListener('deviceorientation', this._orientHandler, true);
+      this._orientHandler = null;
+    }
+    this._gyroEnabled = false;
+    this._deviceOrient = null;
+  },
+
+  _screenOrient() {
+    const a = (screen.orientation && screen.orientation.angle) ||
+              window.orientation || 0;
+    return THREE.MathUtils.degToRad(a);
+  },
+
+  _applyGyroToCamera() {
+    const d = this._deviceOrient;
+    if (!d) return;
+    const deg = THREE.MathUtils.degToRad;
+    const alpha = deg(d.alpha);
+    const beta = deg(d.beta);
+    const gamma = deg(d.gamma);
+    const orient = this._screenOrient();
+    const zee = new THREE.Vector3(0, 0, 1);
+    const euler = new THREE.Euler();
+    const q0 = new THREE.Quaternion();
+    const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // -90° about X
+    euler.set(beta, alpha, -gamma, 'YXZ');
+    this.camera.quaternion.setFromEuler(euler);
+    this.camera.quaternion.multiply(q1);
+    this.camera.quaternion.multiply(q0.setFromAxisAngle(zee, -orient));
+  },
+
+  // Re-place the anchored model in front of where the device currently points
+  placeInFront() {
+    if (!this.arMode || !this.camera) return;
+    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    const dist = 2.2;
+    this._modelPos = new THREE.Vector3(
+      dir.x * dist,
+      dir.y * dist,
+      dir.z * dist
+    );
+    this.targetRotY = 0;
+    this.userRotY = 0;
+  },
+
   stopAR() {
     this.arMode = false;
+    this.disableGyro();
+    this._modelPos = new THREE.Vector3(0, 0, 0);
+    this.autoRotate = true;
+    if (this.camera) {
+      this.camera.position.set(0, 0.25, this.zoom);
+      this.camera.rotation.set(0, 0, 0);
+      this.camera.lookAt(0, 0, 0);
+    }
     if (this.video && this.video.srcObject) {
       this.video.srcObject.getTracks().forEach(t => t.stop());
       this.video.srcObject = null;
@@ -397,6 +505,91 @@ const Viewer3D = {
     return maxDim > 0 ? (targetSize || 1.5) / maxDim : 1;
   },
 
+  // ─── ANNOTATION LABELS ───
+  setLabels(labelDefs) {
+    this.clearLabels();
+    if (!labelDefs || !labelDefs.length) return;
+    const container = document.getElementById(this._currentContainer);
+    if (!container) return;
+
+    // Overlay layer that holds SVG leader lines + HTML label boxes
+    const layer = document.createElement('div');
+    layer.className = 'ar-label-layer';
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('class', 'ar-label-lines');
+    layer.appendChild(svg);
+
+    this.labels = labelDefs.map(def => {
+      const n = new THREE.Vector3(def.dir[0], def.dir[1], def.dir[2]).normalize();
+      const anchor = n.clone().multiplyScalar(0.72);   // point near model surface
+      const labelPos = n.clone().multiplyScalar(1.18);  // where the label floats
+      const line = document.createElementNS(svgNS, 'line');
+      line.setAttribute('class', 'ar-label-line');
+      svg.appendChild(line);
+      const dot = document.createElementNS(svgNS, 'circle');
+      dot.setAttribute('class', 'ar-label-dot');
+      dot.setAttribute('r', '3');
+      svg.appendChild(dot);
+      const box = document.createElement('div');
+      box.className = 'ar-label-box';
+      box.textContent = def.text;
+      layer.appendChild(box);
+      return { anchor, labelPos, line, dot, box };
+    });
+
+    container.appendChild(layer);
+    this._labelLayer = layer;
+  },
+
+  clearLabels() {
+    if (this._labelLayer && this._labelLayer.parentNode) {
+      this._labelLayer.parentNode.removeChild(this._labelLayer);
+    }
+    this._labelLayer = null;
+    this.labels = [];
+  },
+
+  _updateLabels() {
+    if (!this.labels.length || !this.group || !this.camera) return;
+    const container = document.getElementById(this._currentContainer);
+    if (!container) return;
+    const w = container.clientWidth, h = container.clientHeight;
+    this.group.updateMatrixWorld();
+    const tmp = new THREE.Vector3();
+
+    const project = (localVec) => {
+      tmp.copy(localVec).applyMatrix4(this.group.matrixWorld).project(this.camera);
+      return {
+        x: (tmp.x * 0.5 + 0.5) * w,
+        y: (-tmp.y * 0.5 + 0.5) * h,
+        visible: tmp.z < 1 && tmp.z > -1
+      };
+    };
+
+    this.labels.forEach(l => {
+      const a = project(l.anchor);
+      const p = project(l.labelPos);
+      if (!a.visible || !p.visible) {
+        l.box.style.opacity = '0';
+        l.line.style.opacity = '0';
+        l.dot.style.opacity = '0';
+        return;
+      }
+      l.box.style.opacity = '1';
+      l.line.style.opacity = '1';
+      l.dot.style.opacity = '1';
+      // Anchor to the side of the box nearest the model
+      const onRight = p.x >= a.x;
+      l.box.style.left = p.x + 'px';
+      l.box.style.top = p.y + 'px';
+      l.box.style.transform = `translate(${onRight ? '0' : '-100%'}, -50%)`;
+      l.line.setAttribute('x1', a.x); l.line.setAttribute('y1', a.y);
+      l.line.setAttribute('x2', p.x); l.line.setAttribute('y2', p.y);
+      l.dot.setAttribute('cx', a.x); l.dot.setAttribute('cy', a.y);
+    });
+  },
+
   showComponent(comp) {
     this.clear();
     const key = comp.id === 'rbc' ? 'rbc' : comp.id === 'wbc' ? 'wbc' :
@@ -413,14 +606,15 @@ const Viewer3D = {
         }
       });
       const s = this._fitModel(model, 1.5);
-      this._baseScale = s;
+      model.scale.set(s, s, s);
+      this._baseScale = 1;
       this.group = new THREE.Group();
       this.group.add(model);
-      this.group.scale.set(s, s, s);
       this.scene.add(this.group);
       const pc = comp.id === 'rbc' ? '#CC3333' : comp.id === 'wbc' ? '#E8E0D0' :
                 comp.id === 'platelet' ? '#D4C5A9' : '#F5E6B8';
       this._spawnParticles(comp.id === 'rbc' ? 40 : 25, pc, [0.006, 0.018]);
+      this.setLabels(window.AR_LABELS?.[comp.id]);
     }, (err) => console.error(key + ' GLTF parse error:', err));
   },
 
@@ -438,11 +632,12 @@ const Viewer3D = {
         }
       });
       const s = this._fitModel(model, 1.5);
-      this._baseScale = s;
+      model.scale.set(s, s, s);
+      this._baseScale = 1;
       this.group = new THREE.Group();
       this.group.add(model);
-      this.group.scale.set(s, s, s);
       this.scene.add(this.group);
+      this.setLabels(window.AR_LABELS?.[pattern.id]);
     }, (err) => console.error(pattern.id + ' GLTF parse error:', err));
   }
 };

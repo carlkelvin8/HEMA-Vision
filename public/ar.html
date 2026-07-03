@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <title>HEMA-Vision — AR View</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="/js/models_gltf.js"></script>
+  <script src="/js/data.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+    #cam { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; background: #111; }
+    #gl { position: fixed; inset: 0; z-index: 1; }
+    #gl canvas { display: block; width: 100% !important; height: 100% !important; touch-action: none; }
+
+    .loader { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 16px; background: #0A0E1A; color: #F9FAFB;
+      text-align: center; padding: 24px; }
+    .loader .spin { width: 42px; height: 42px; border: 3px solid rgba(255,255,255,0.15);
+      border-top-color: #DC2626; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .top { position: fixed; top: 0; left: 0; right: 0; z-index: 30; display: flex; align-items: center; gap: 12px;
+      padding: max(14px, env(safe-area-inset-top)) 16px 14px;
+      background: linear-gradient(180deg, rgba(10,14,26,0.8), transparent); pointer-events: none; }
+    .top button { pointer-events: auto; }
+    .back { width: 42px; height: 42px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(10,14,26,0.65); color: #fff; font-size: 20px; cursor: pointer;
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+    .title { color: #fff; font-weight: 700; font-size: 16px; text-shadow: 0 2px 8px rgba(0,0,0,0.6); flex: 1; }
+    .title small { display: block; font-weight: 500; font-size: 12px; color: #F59E0B; }
+
+    .bottom { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; flex-direction: column;
+      align-items: center; gap: 10px; padding: 16px 16px max(20px, env(safe-area-inset-bottom));
+      background: linear-gradient(0deg, rgba(10,14,26,0.8), transparent); pointer-events: none; }
+    .hint { background: rgba(10,14,26,0.8); color: #E5E7EB; font-size: 13px; padding: 10px 18px;
+      border-radius: 999px; border: 1px solid rgba(245,158,11,0.4); text-align: center;
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+    .ctrls { display: flex; gap: 10px; pointer-events: auto; }
+    .cbtn { width: 48px; height: 48px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(10,14,26,0.65); color: #fff; font-size: 16px; font-weight: 700; cursor: pointer;
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+
+    #labels { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
+    #labels svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .lbl { position: absolute; padding: 5px 11px; background: rgba(10,14,26,0.82); color: #fff;
+      border: 1px solid rgba(255,255,255,0.16); border-radius: 8px; font-size: 12px; font-weight: 600;
+      white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,0.4); backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px); transition: opacity 0.15s; }
+
+    .err { position: fixed; inset: 0; z-index: 60; display: none; flex-direction: column; align-items: center;
+      justify-content: center; gap: 14px; padding: 30px; background: #0A0E1A; color: #fff; text-align: center; }
+    .err.show { display: flex; }
+    .err button { padding: 12px 22px; border: none; border-radius: 12px; background: #DC2626; color: #fff;
+      font-weight: 600; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <video id="cam" playsinline autoplay muted></video>
+  <div id="gl"></div>
+  <div id="labels"><svg></svg></div>
+
+  <div class="loader" id="loader">
+    <div class="spin"></div>
+    <div>Starting camera…</div>
+    <div style="font-size:12px;color:#9CA3AF">Allow camera access when prompted</div>
+  </div>
+
+  <div class="err" id="err">
+    <div style="font-size:40px">📷</div>
+    <div id="err-msg">Camera not available.</div>
+    <button onclick="goBack()">← Back to app</button>
+  </div>
+
+  <div class="top">
+    <button class="back" onclick="goBack()">←</button>
+    <div class="title" id="title">AR Model<small id="subtitle">Live camera view</small></div>
+  </div>
+
+  <div class="bottom">
+    <div class="hint" id="hint">🔴 Model is floating in view · drag to rotate · pinch to zoom</div>
+    <div class="ctrls">
+      <button class="cbtn" onclick="AR.zoomIn()">🔍+</button>
+      <button class="cbtn" onclick="AR.zoomOut()">🔍−</button>
+      <button class="cbtn" id="rotbtn" onclick="AR.toggleRotate()">⏸️</button>
+      <button class="cbtn" onclick="AR.reset()">↺</button>
+    </div>
+  </div>
+
+  <script src="/js/ar-markerless.js"></script>
+</body>
+</html>

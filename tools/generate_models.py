@@ -516,7 +516,7 @@ add('altered', gen_altered_stain(), (0.33, 0.03, 0.03), 0.0, 0.5, (0.06, 0.01, 0
 #  OUTPUT JAVASCRIPT MODULE
 # ═══════════════════════════════════════════════════
 
-out_path = os.path.join(os.path.dirname(__file__), '..', 'js', 'models_gltf.js')
+out_path = os.path.join(os.path.dirname(__file__), '..', 'public', 'js', 'models_gltf.js')
 os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
 js_lines = ['// Auto-generated ultra-high-quality 3D models (GLTF embedded)\n']
